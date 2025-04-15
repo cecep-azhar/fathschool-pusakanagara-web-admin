@@ -63,7 +63,7 @@ class LeaveService
 
 
         $leaves = $query->whereHas('user', function ($user) {
-            $user->whereNotIn('role', ['parent', 'student']);
+            $user->whereNotIn('role', ['parent', 'student', 'admin']);
         })
             ->latest()
             ->with('user.department', 'type')
