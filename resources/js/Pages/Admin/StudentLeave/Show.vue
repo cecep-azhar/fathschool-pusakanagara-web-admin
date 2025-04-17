@@ -72,12 +72,13 @@ export default {
     },
     methods: {
         getImageUrl(image) {
-            const baseUrl = import.meta.env.VITE_APP_URL
+            const baseUrl = import.meta.env.VITE_APP_URL;
             if (!image) {
                 return `${baseUrl}/images/default.png`; // Gambar default jika tidak ada
             }
-            if (image.startsWith("http")) {
-                return image; // Jika sudah URL lengkap, langsung digunakan
+            // Cek apakah image sudah berupa URL lengkap (http atau https)
+            if (/^https?:\/\//.test(image)) {
+                return image;
             }
             return `${baseUrl}/storage/leaves/${image}`; // Tambahkan path storage jika hanya nama file
         },

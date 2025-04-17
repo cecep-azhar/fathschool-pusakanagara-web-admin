@@ -35,8 +35,17 @@ class LeaveService
             : $today->copy()->endOfDay();
 
         // Ambil data yang berada di antara start-end date
-        $query->whereDate('start', '<=', $endDate)
-            ->whereDate('end', '>=', $startDate);
+        // Ambil data yang berada di antara start-end date
+        $query->where(function ($q) use ($startDate, $endDate) {
+            $q->where(function ($q2) use ($startDate, $endDate) {
+                $q2->whereDate('start', '<=', $endDate)
+                    ->whereDate('end', '>=', $startDate)
+                    ->whereColumn('end', '>=', 'start'); // valid
+            })->orWhere(function ($q2) use ($endDate) {
+                $q2->whereNull('end') // data yang belum diisi end
+                    ->orWhereColumn('end', '<', 'start'); // data error
+            });
+        });
 
         // status filter
         if ($request->has('status') && $request->status != 'all' && $request->status != null) {
