@@ -2,78 +2,64 @@
 
 namespace App\Imports;
 
-use App\Models\Course;
-use App\Models\Department;
-use App\Models\User;
-use App\Models\UserProfile;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
-use Maatwebsite\Excel\Concerns\Importable;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use Illuminate\Support\Collection;
+use App\Models\User;
+use Illuminate\Support\Facades\Log;
 
 class TeachersImport implements ToCollection, WithHeadingRow
 {
-    use Importable;
+    use \Maatwebsite\Excel\Concerns\Importable;
 
     public function collection(Collection $rows)
     {
-        foreach ($rows as $row) {
-            // for email validation
-            $query = User::query();
-            $email = $row['email'];
-            $new_email = '';
-            if ($email) {
+        Log::info('Starting teacher import process', ['row_count' => $rows->count()]);
 
-                $check_email_is_exist = $query->where('email', $email)->first();
-                if ($check_email_is_exist) {
-                    $new_email = Str::random(4) . $email;
-                } else {
-                    $new_email = $email;
-                }
+        foreach ($rows as $row) {
+            // Debugging: Log data baris untuk memastikan data dibaca dengan benar
+            Log::info('Row Data:', $row->toArray());
+
+            // Validasi NIP
+            $nip = $row['Nip'] ?? null; // Perhatikan huruf kapital "Nip"
+            if (!$nip) {
+                Log::warning('Skipping row due to missing NIP');
+                continue;
             }
 
+            // Validasi Email
+            $email = $row['Email'] ?? null; // Perhatikan huruf kapital "Email"
+            if ($email && User::where('email', $email)->exists()) {
+                Log::warning('Skipping duplicate email', ['email' => $email]);
+                continue;
+            }
 
-            // for department validation
-            // $department = '';
-            // if ($row['departmentname']) {
+            // Validasi Nomor Telepon
+            $phone = $row['Nomor Telepon'] ?? null; // Perhatikan spasi "Nomor Telepon"
 
-            //     $exit_department = Department::where('name', $row['departmentname'])->first();
-            //     if ($exit_department) {
-            //         $department = $exit_department->id;
-            //     } else {
-            //         $department = Department::inRandomOrder()->value('id');
-            //     }
-            // } else {
-            //     $department = Department::inRandomOrder()->value('id');
-            // }
+            // Buat pengguna baru
+            try {
+                $added_user = User::create([
+                    'nip' => $nip,
+                    'rfid' => $row['Rfid'] ?? null, // Perhatikan huruf kapital "Rfid"
+                    'name' => $row['Name'] ?? 'Nama Tidak Diketahui', // Perhatikan huruf kapital "Name"
+                    'email' => $email,
+                    'role' => 'Teacher',
+                    'password' => bcrypt($row['Password'] ?? 'password'), // Default password jika kosong
+                    'phone' => $phone,
+                ]);
 
-            $added_user = User::create([
-                'nik' => isset($row['nik']) ? $row['nik'] : null,
-                'rfid' => isset($row['rfid']) ? $row['rfid'] : null,
-                'name' => isset($row['name']) ? $row['name'] : Str::random(6),
-                // 'gender' => isset($row['gender']) ? $row['gender'] : Arr::random(['male', 'female', 'other']),
-                'date_of_birth' => isset($row['tanggal_lahir']) ? Carbon::parse($row['tanggal_lahir']) : Carbon::now(),
-                'email' => isset($new_email) ? $new_email : null,
-                'role' => 'Teacher',
-                'password' => isset($row['password']) ? bcrypt($row['password']) : bcrypt('password'),
-                'phone' => isset($row['nomor_telepon']) ? $row['nomor_telepon'] : Str::random(6),
-                // 'address' => isset($row['address']) ? $row['address'] : Str::random(6),
-                // 'department_id' => $department,
-            ]);
+                Log::info('Teacher created', ['nip' => $nip, 'email' => $email]);
 
-            $added_user;
-
-            // $profile = $added_user->profile()->create([
-            //     'roll_no' => isset($new_roll_no) ? $new_roll_no : Str::random(6),
-            //     'student_id' => idGenerate(),
-            // ]);
-
-            // $course = $added_user->courses()->create([
-            //     'course_id' => $class,
-            // ]);
+                // Buat profil pengguna
+                $added_user->profile()->create([
+                    'student_id' => idGenerate(), // Menggunakan fungsi uniqid
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Error creating teacher', ['error' => $e->getMessage()]);
+            }
         }
+
+        Log::info('Teacher import process completed');
     }
 }
