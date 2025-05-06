@@ -212,6 +212,7 @@ Route::get('/get-information-others', [DataDisplayFathboard::class, 'getDataOthe
 
 
 Route::get('/send-wa-class', [DataDisplayFathboard::class, 'sendWaClass']);
+Route::get('/send-wa-teacher', [DataDisplayFathboard::class, 'sendWaTeacher']);
 
 Route::get('/getSettings', [GetSettings::class, 'index']);
 

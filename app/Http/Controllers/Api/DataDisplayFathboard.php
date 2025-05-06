@@ -20,71 +20,66 @@ class DataDisplayFathboard extends Controller
 {
     public function getDataSiswa()
     {
-        $now = Carbon::now()->format('H:i:s');
-        $dayOfWeek = Carbon::now()->dayOfWeekIso;
-        $weekRoutines = Carbon::now()->dayOfWeek;
         $today = now()->format('Y-m-d');
-        $today2 = now();
 
-        // Get class data and decode the JSON response
+        // Ambil data kelas
         $classResponse = $this->getDataClass();
         $responseContent = json_decode($classResponse->getContent());
-        $classData = $responseContent->data->classes;
+        $classData = $responseContent->data->classes ?? [];
 
-        // Calculate total students from all grades (X, XI, XII)
-        $raw_total_students = 0;
-        $raw_total_present = 0;
-        $raw_total_absent = 0;
-        $raw_total_leave = 0;
+        // Inisialisasi total
+        $totalStudents = 0;
+        $totalPresent = 0;
+        $totalAbsent = 0;
+        $totalLeave = 0;
 
-        // Aggregate data from all classes
-        foreach ($classData as $grade) {
-            $raw_total_students += $grade->total_students;
-            $raw_total_present += $grade->total_present;
-            $raw_total_absent += $grade->total_absent;
-            $raw_total_leave += $grade->total_leave;
+        // Loop semua kelas untuk agregasi data
+        foreach ($classData as $class) {
+            $totalStudents += $class->total_students ?? 0;
+            $totalPresent += $class->total_present ?? 0;
+            $totalAbsent += $class->total_absent ?? 0;
+            $totalLeave += $class->total_leave ?? 0;
         }
 
-        // Calculate percentages using raw numbers
-        $presentPercentage = $raw_total_students > 0 ?
-            round(($raw_total_present / $raw_total_students) * 100, 2) . '%' : '0%';
-        $absentPercentage = $raw_total_students > 0 ?
-            round(($raw_total_absent / $raw_total_students) * 100, 2) . '%' : '0%';
-        $leavePercentage = $raw_total_students > 0 ?
-            round(($raw_total_leave / $raw_total_students) * 100, 2) . '%' : '0%';
+        // Hitung persentase
+        $presentPercentage = $totalStudents > 0 ? round(($totalPresent / $totalStudents) * 100, 2) . '%' : '0%';
+        $absentPercentage = $totalStudents > 0 ? round(($totalAbsent / $totalStudents) * 100, 2) . '%' : '0%';
+        $leavePercentage = $totalStudents > 0 ? round(($totalLeave / $totalStudents) * 100, 2) . '%' : '0%';
 
-        // Get attendance details
+        // Ambil data detail siswa
         $presentStudents = $this->getDetailedPresent('student', $today);
         $absentStudents = $this->getDetailedAbsent('student', $today);
-        $leaveStudents = $this->getDetailedLeave('student', $today); //NOTE - 'Student' atau 'student'
+        $leaveStudents = $this->getDetailedLeave('student', $today);
 
-        // Format the numbers after calculations are done
-        $total_students = number_format($raw_total_students);
-        $total_present = number_format($raw_total_present);
-        $total_absent = number_format($raw_total_absent);
-        $total_leave = number_format($raw_total_leave);
+        // Format angka (kasih titik ribuan)
+        $formattedTotalStudents = number_format($totalStudents);
+        $formattedTotalPresent = number_format($totalPresent);
+        $formattedTotalAbsent = number_format($totalAbsent);
+        $formattedTotalLeave = number_format($totalLeave);
 
+        // Buat response
         $response = [
             'status' => true,
             'messages' => 'Successfully retrieved data',
             'data' => [
                 'students' => [
-                    'total' => $total_students,
-                    'present' => $total_present,
-                    'absent' => $total_absent,
-                    'leave' => $total_leave,
+                    'total' => $formattedTotalStudents,
+                    'present' => $formattedTotalPresent,
+                    'absent' => $formattedTotalAbsent,
+                    'leave' => $formattedTotalLeave,
                     'presentPercentage' => $presentPercentage,
                     'absentPercentage' => $absentPercentage,
                     'leavePercentage' => $leavePercentage,
                     'dataPresent' => $presentStudents,
                     'dataAbsent' => $absentStudents,
-                    'dataLeave' => $leaveStudents
+                    'dataLeave' => $leaveStudents,
                 ]
             ]
         ];
 
-        return response($response);
+        return response()->json($response);
     }
+
     // * Function Get Data Guru
     public function getDataGuru()
     {
@@ -448,9 +443,14 @@ class DataDisplayFathboard extends Controller
 
     public function sendWaClass()
     {
+        // Set lokal Carbon ke bahasa Indonesia
+        Carbon::setLocale('id');
+
         $now = Carbon::now()->format('H:i:s');
         $weekRoutines = Carbon::now()->dayOfWeek;
         $today = Carbon::now()->toDateString();
+        // Format tanggal dalam bahasa Indonesia
+        $todayFormatted = Carbon::now()->translatedFormat('d F Y');
 
         // Get data kelas dari fungsi yang sudah ada
         $classData = $this->getClassData($weekRoutines, $now);
@@ -521,32 +521,28 @@ class DataDisplayFathboard extends Controller
             : 0;
 
         // Format WA Message
-        $todayFormatted = Carbon::now()->format('d F Y');
-        $waMessage = "📊 *Laporan Kehadiran Harian*\n📅 Tanggal: {$todayFormatted}\n\n";
+        $waMessage = "*Laporan Kehadiran Harian*\nTanggal: {$todayFormatted}\n\n";
 
         // Total dan Persentase
         $totalAll = $totalPresent + $totalLeave + $totalAbsent;
-
         $percentPresent = $totalAll > 0 ? round(($totalPresent / $totalAll) * 100) : 0;
         $percentLeave = $totalAll > 0 ? round(($totalLeave / $totalAll) * 100) : 0;
         $percentAbsent = $totalAll > 0 ? round(($totalAbsent / $totalAll) * 100) : 0;
 
         // Tambahkan total di bawah
-        $waMessage .= "Total Kehadiran {$totalPresent} - {$percentPresent}%\n";
-        $waMessage .= "Total Izin {$totalLeave} - {$percentLeave}%\n";
-        $waMessage .= "Total Alfa {$totalAbsent} - {$percentAbsent}%\n\n";
+        $waMessage .= "Total Kehadiran: {$totalPresent} ({$percentPresent}%)\n";
+        $waMessage .= "Total Izin: {$totalLeave} ({$percentLeave}%)\n";
+        $waMessage .= "Total Alfa: {$totalAbsent} ({$percentAbsent}%)\n\n";
+
+        // Tambahan baris link informasi
+        $waMessage .= "Informasi lebih lengkap: https://fathboard.smkn1pusakanagara.id\n\n";
 
         $no = 1;
         foreach ($classes as $class) {
-            $waMessage .= "#" . $no . " " . $class['name'] .
-                " H:" . $class['total_present'] .
-                " I:" . $class['total_leave'] .
-                " A:" . $class['total_absent'] . "\n";
-
+            $waMessage .= "#{$no} {$class['name']} H:{$class['total_present']} I:{$class['total_leave']} A:{$class['total_absent']}\n";
             if ($no % 10 === 0) {
                 $waMessage .= "\n";
             }
-
             $no++;
         }
 
@@ -555,12 +551,12 @@ class DataDisplayFathboard extends Controller
         $waMessage .= "*Generated by FathSchool*";
 
         // Daftar nomor tujuan
-        $adminNumbers = ['6285220696117', '62895601096303'];
+        $adminNumbers = ['6285220696117', '62895601096303', '6282117310535'];
 
         foreach ($adminNumbers as $number) {
             $data = [
-                'api_key' => 'VNDDEZ5KBWDQGl5XBTXv9pW2Y6GpNn',
-                'sender' => '6289635850446',
+                'api_key' => '2E8k9kdCHOU1EVtgIB5K5TdlXxv1GLai',
+                'sender' => '6282298543545',
                 'number' => $number,
                 'message' => $waMessage,
             ];
@@ -577,6 +573,97 @@ class DataDisplayFathboard extends Controller
         ]);
     }
 
+    public function sendWaTeacher()
+    {
+        // Set lokal Carbon ke bahasa Indonesia
+        Carbon::setLocale('id');
+
+        $now = Carbon::now()->format('H:i:s');
+        $today = Carbon::now()->toDateString();
+        // Format tanggal dalam bahasa Indonesia
+        $todayFormatted = Carbon::now()->translatedFormat('d F Y');
+
+        // Ambil semua guru aktif
+        $teachers = User::active()->teacher()->get()->unique('id');
+
+        // Kehadiran guru
+        $attendance = Attendance::whereDate('date', $today)->get()->unique('user_id');
+
+        // Izin guru
+        $leaves = Leave::whereHas('user', function ($query) {
+            $query->where('role', 'teacher');
+        })->whereDate('start', '<=', $today)
+          ->whereDate('end', '>=', $today)
+          ->where('status', 'accepted')
+          ->get()->unique('user_id');
+
+        // Guru yang tidak hadir
+        $teachersAbsent = $teachers->reject(function ($teacher) use ($attendance, $leaves) {
+            return $attendance->contains('user_id', $teacher->id) ||
+                   $leaves->contains('user_id', $teacher->id);
+        });
+
+        $totalPresent = $attendance->count();
+        $totalLeave = $leaves->count();
+        $totalAbsent = $teachersAbsent->count();
+
+        $totalAll = $totalPresent + $totalLeave + $totalAbsent;
+        $percentPresent = $totalAll > 0 ? round(($totalPresent / $totalAll) * 100) : 0;
+        $percentLeave = $totalAll > 0 ? round(($totalLeave / $totalAll) * 100) : 0;
+        $percentAbsent = $totalAll > 0 ? round(($totalAbsent / $totalAll) * 100) : 0;
+
+        // Format pesan WA
+        $waMessage = "*Laporan Kehadiran Guru*\nTanggal: {$todayFormatted}\n\n";
+        $waMessage .= "Total Kehadiran: {$totalPresent} ({$percentPresent}%)\n";
+        $waMessage .= "Total Izin: {$totalLeave} ({$percentLeave}%)\n";
+        $waMessage .= "Total Alfa: {$totalAbsent} ({$percentAbsent}%)\n\n";
+
+        // Daftar guru dengan status
+        $waMessage .= "*Detail Kehadiran Guru*:\n";
+        $no = 1;
+        foreach ($teachers as $teacher) {
+            $status = $attendance->contains('user_id', $teacher->id) ? 'Hadir' :
+                      ($leaves->contains('user_id', $teacher->id) ? 'Izin' : 'Alfa');
+            $waMessage .= "{$no}. {$teacher->name} - {$status}\n";
+            $no++;
+            // Tambahkan jeda setiap 10 entri untuk kejelasan
+            if ($no % 10 === 0) {
+                $waMessage .= "\n";
+            }
+        }
+        $waMessage .= "\n";
+
+        // Link informasi
+        $waMessage .= "Informasi lebih lengkap: https://fathboard.smkn1pusakanagara.id\n\n";
+        $waMessage .= "Pesan ini bersifat otomatis dari sistem FathSchool.\n\n";
+        $waMessage .= "*Generated by FathSchool*";
+
+        // Daftar nomor tujuan admin
+        $adminNumbers = ['6285220696117', '62895601096303', '6282117310535'];
+
+        foreach ($adminNumbers as $number) {
+            $data = [
+                'api_key' => '2E8k9kdCHOU1EVtgIB5K5TdlXxv1GLai',
+                'sender' => '6282298543545',
+                'number' => $number,
+                'message' => $waMessage,
+            ];
+
+            // Kirim pesan WA
+            $wa_status = $this->sendWa($data);
+            $wa = json_decode($wa_status);
+        }
+
+        return response([
+            'status' => true,
+            'message' => 'Laporan kehadiran guru berhasil dikirim',
+            'data' => [
+                'present' => $totalPresent,
+                'leave' => $totalLeave,
+                'absent' => $totalAbsent,
+            ],
+        ]);
+    }
 
     public function getDataOther()
     {
